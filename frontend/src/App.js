@@ -29,7 +29,6 @@ const emptyShared = { candidate: null, date: '', batch: '' };
 const totalCompetencies = assessmentData.reduce((sum, r) => sum + r.competencies.length, 0);
 const countFilled = (ratings) => Object.values(ratings).filter(v => v !== '').length;
 
-// Parse CSV — trims ALL headers and values
 const parseCSV = (text) => {
   const lines = text.trim().split('\n');
   const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
@@ -53,7 +52,6 @@ const parseCSV = (text) => {
   return rows;
 };
 
-// Fuzzy field getter — handles whitespace mismatches in header names
 const getField = (obj, name) => {
   if (!obj) return '';
   if (obj[name] !== undefined) return obj[name];
@@ -175,9 +173,23 @@ const AssessmentForm = () => {
     }
   };
 
+  // Scroll to top when switching tabs
+  const handleTabChange = (_, newValue) => {
+    setActiveTab(newValue);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Also scroll to top when clicking "Next → Assessor 2"
+  const handleNextAssessor = () => {
+    setActiveTab(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setSubmitError('');
+    // Scroll to top so user sees the submitting state / success dialog
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     const candidateObj = shared.candidate ? {
       'Full Name': getField(shared.candidate, 'Full Name'),
@@ -196,9 +208,7 @@ const AssessmentForm = () => {
     };
 
     try {
-      // UPDATE THIS LINE:
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
       const res = await fetch(`${API_URL}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -225,6 +235,7 @@ const AssessmentForm = () => {
     setActiveTab(0);
     setShowSuccess(false);
     setSubmitError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const isComplete = (idx) =>
@@ -279,7 +290,7 @@ const AssessmentForm = () => {
 
       {/* Assessor Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+        <Tabs value={activeTab} onChange={handleTabChange}>
           {[0, 1].map(idx => (
             <Tab key={idx} label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -357,12 +368,12 @@ const AssessmentForm = () => {
           />
 
           {idx === 0 && (
-            <Button variant="outlined" onClick={() => setActiveTab(1)}>Next → Assessor 2</Button>
+            <Button variant="outlined" onClick={handleNextAssessor}>Next → Assessor 2</Button>
           )}
         </Box>
       ))}
 
-      {/* Submit row */} 
+      {/* Submit row */}
       <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
         <Button
           variant="contained" size="large" onClick={handleSubmit}
