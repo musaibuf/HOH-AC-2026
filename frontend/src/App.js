@@ -14,7 +14,7 @@ const assessors = [
   "Omer Qasim", "Owais Magrabi", "Qamber Rizvi", "Quaid Khan", "Rai Adil Zubair", "Rameez Asif", 
   "Rameez Asif Siddiqui", "Rhonda Fernandes", "Saad Ullah", "Sabika Haider", "Saeed Ahmed", "Salman Afzal", 
   "Sameer Amlani", "Sarmad Qureshi", "Sumair Shafiq", "Umair Ali Bhatti", "Uraib Ahmed", "Usman Ahmed Khan", 
-  "Usama Razzaque", "Waqar Ali Baloch", "Wajahat Hussain", "Waleed Anwar", "Waleed Faridi", "Zaid Imad", 
+  "Usama Razzaque", "Waqar Ali Baloch", "Uneeb Zia", "Wajahat Hussain", "Waleed Anwar", "Waleed Faridi", "Zaid Imad", 
   "Zeeshan Shahid", "Zohair Islam", "Zunair Khan"
 ];
 
