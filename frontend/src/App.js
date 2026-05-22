@@ -9,7 +9,7 @@ import {
 const assessors = [
   "Ahmer Abdus Samad", "Ali Ayub", "Amber Agha", "Anisa Dhanani", "Dania Shahab", "Danish Arshad", 
   "Danish Owais", "Fahad Tariq Rafi", "Faisal Masood", "Faisal Muneeb", "Farrukh Shafiq", "Haider Ali Taj", 
-  "Hareem Humail", "Hiba Saeed", "Hina Qureshi", "Hira Azhar", "Iraj Mustafa", "Kamran Z. Rizvi", 
+  "Hareem Humail","Haris Fudda", "Hiba Saeed", "Hina Qureshi", "Hira Azhar", "Iraj Mustafa", "Kamran Z. Rizvi", 
   "Kanza Afzal", "Kashif Rahim", "Mohsin Ahmed", "Mohsin Siddiqui", "Muhammad Sumair", "Omair Mazhar Qureshi", 
   "Omer Qasim", "Owais Magrabi", "Qamber Rizvi", "Quaid Khan", "Rai Adil Zubair", "Rameez Asif", 
   "Rameez Asif Siddiqui", "Rhonda Fernandes", "Saad Ullah", "Sabika Haider", "Saeed Ahmed", "Salman Afzal", 
