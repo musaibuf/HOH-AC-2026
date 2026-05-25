@@ -94,7 +94,7 @@ const Dashboard = () => {
   const [starCnics, setStarCnics] = useState(new Set());
   
   const [competencyAverages, setCompetencyAverages] = useState([]);
-  const [roundAverages, setRoundAverages] = useState([]);
+const [clusterAverages, setClusterAverages] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const cleanHeaders = (data) => {
@@ -107,12 +107,9 @@ const Dashboard = () => {
     });
   };
 
-  const calculateAverages = (data) => {
+const calculateAverages = (data) => {
     const compStats = {};
-    const rndStats = {};
-
     const knownRounds = ['Battle of Wesnoth', 'The Ultimate Resource Challenge', 'Conflict Roleplays'];
-    const roundMaxScores = { 'Battle of Wesnoth': 36, 'The Ultimate Resource Challenge': 36, 'Conflict Roleplays': 28 };
 
     const compMap = {
       'Achievement Focus': 'Achievement Focus', 'Business Acumen': 'Business Acumen',
@@ -123,28 +120,18 @@ const Dashboard = () => {
       'Teamwork & Collaboration': 'Teamwork and Collaboration' 
     };
 
+    const clusterMap = {
+      'Interpersonal Savvy': 'Collaborate for Success', 'Stakeholder Management': 'Collaborate for Success',
+      'Developing others': 'Collaborate for Success', 'Teamwork and Collaboration': 'Collaborate for Success',
+      'Customer Focus': 'Drive for Results', 'Achievement Focus': 'Drive for Results',
+      'Commitment to Process Improvement': 'Drive for Results', 'Business Acumen': 'Achieving Excellence',
+      'Individual Acumen': 'Achieving Excellence', 'Problem Solving': 'Achieving Excellence',
+      'Decision Making': 'Achieving Excellence'
+    };
+
     Object.values(compMap).forEach(comp => compStats[comp] = { sum: 0, count: 0 });
-    knownRounds.forEach(round => rndStats[round] = { sum: 0, count: 0 });
 
     data.forEach(row => {
-      knownRounds.forEach(round => {
-        let candidateRoundTotal = 0;
-        let hasValidScore = false;
-        Object.keys(row).forEach(key => {
-          if (key.startsWith(round + '-')) {
-            const value = parseFloat(row[key]);
-            if (!isNaN(value)) {
-              candidateRoundTotal += value;
-              hasValidScore = true;
-            }
-          }
-        });
-        if (hasValidScore) {
-          rndStats[round].sum += candidateRoundTotal;
-          rndStats[round].count += 1;
-        }
-      });
-
       Object.keys(row).forEach(key => {
         const matchedRound = knownRounds.find(r => key.startsWith(r + '-'));
         if (matchedRound) {
@@ -161,15 +148,36 @@ const Dashboard = () => {
       });
     });
 
-    setCompetencyAverages(Object.keys(compStats).map(k => ({
-      name: k, avg: compStats[k].count > 0 ? (compStats[k].sum / compStats[k].count).toFixed(2) : '0.00'
+    // 1. Calculate individual competency averages
+    const compAveragesRaw = Object.keys(compStats).map(k => ({
+      name: k, 
+      avgVal: compStats[k].count > 0 ? (compStats[k].sum / compStats[k].count) : 0
+    }));
+
+    setCompetencyAverages(compAveragesRaw.map(c => ({
+      name: c.name, avg: c.avgVal.toFixed(2)
     })).sort((a, b) => a.name.localeCompare(b.name)));
 
-    setRoundAverages(Object.keys(rndStats).map(k => ({
-      name: k, avg: `${rndStats[k].count > 0 ? (rndStats[k].sum / rndStats[k].count).toFixed(2) : '0.00'} / ${roundMaxScores[k]}`
+    // 2. Sum them up for the Clusters
+    const clusterTotals = {
+      'Collaborate for Success': 0,
+      'Drive for Results': 0,
+      'Achieving Excellence': 0
+    };
+
+    compAveragesRaw.forEach(comp => {
+      const clusterName = clusterMap[comp.name];
+      if (clusterName) {
+        clusterTotals[clusterName] += comp.avgVal;
+      }
+    });
+
+    setClusterAverages(Object.keys(clusterTotals).map(k => ({
+      name: k, 
+      avg: clusterTotals[k].toFixed(2),
+      max: k === 'Drive for Results' ? 12 : 16 // Set max score for UI
     })));
   };
-
   const calculateFinalResults = (cleanedMaster, cleanedAssessment, profileData) => {
     const profileMap = {};
     profileData.forEach(row => {
@@ -325,65 +333,79 @@ const getCandidateScores = (cnic) => {
       'Problem Solving': 'Problem Solving', 'Stakeholder Management': 'Stakeholder Management',
       'Teamwork & Collaboration': 'Teamwork and Collaboration' 
     };
+
+    const clusterMap = {
+      'Interpersonal Savvy': 'Collaborate for Success', 'Stakeholder Management': 'Collaborate for Success',
+      'Developing others': 'Collaborate for Success', 'Teamwork and Collaboration': 'Collaborate for Success',
+      'Customer Focus': 'Drive for Results', 'Achievement Focus': 'Drive for Results',
+      'Commitment to Process Improvement': 'Drive for Results', 'Business Acumen': 'Achieving Excellence',
+      'Individual Acumen': 'Achieving Excellence', 'Problem Solving': 'Achieving Excellence',
+      'Decision Making': 'Achieving Excellence'
+    };
+
     const knownRounds = ['Battle of Wesnoth', 'The Ultimate Resource Challenge', 'Conflict Roleplays'];
 
     const compStats = {};
     Object.values(compMap).forEach(c => compStats[c] = { sum: 0, count: 0 });
-    const rndStats = {};
-    knownRounds.forEach(r => rndStats[r] = { sum: 0, count: 0 });
-    
-    const comments = []; // Array to hold comments
+    const comments = []; 
 
     rows.forEach(row => {
-      // Extract Comments
-      const commentText = row['Comments']?.trim();
-      const assessorName = row['Assessor Name']?.trim();
+      let commentText = row['Comments']?.trim();
+      
       if (commentText) {
-        comments.push(`${assessorName}: ${commentText}`);
+        // Capitalize the very first letter, and any letter immediately following a ". "
+        commentText = commentText.replace(/(?:^|\.\s+)([a-z])/g, match => match.toUpperCase());
+        
+        // Push ONLY the comment text (Assessor name removed)
+        comments.push(commentText);
       }
 
-      knownRounds.forEach(round => {
-        let candidateRoundTotal = 0;
-        let hasValidScore = false;
-        Object.keys(row).forEach(key => {
-          if (key.startsWith(round + '-')) {
-            const val = parseFloat(row[key]);
-            if (!isNaN(val)) {
-              candidateRoundTotal += val;
-              hasValidScore = true;
-              const rawCompName = key.replace(round + '-', '').trim();
-              const normalizedCompName = compMap[rawCompName];
-              if (normalizedCompName) {
-                compStats[normalizedCompName].sum += val;
-                compStats[normalizedCompName].count += 1;
-              }
+      Object.keys(row).forEach(key => {
+        const matchedRound = knownRounds.find(r => key.startsWith(r + '-'));
+        if (matchedRound) {
+          const val = parseFloat(row[key]);
+          if (!isNaN(val)) {
+            const rawCompName = key.replace(matchedRound + '-', '').trim();
+            const normalizedCompName = compMap[rawCompName];
+            if (normalizedCompName) {
+              compStats[normalizedCompName].sum += val;
+              compStats[normalizedCompName].count += 1;
             }
           }
-        });
-        if (hasValidScore) {
-          rndStats[round].sum += candidateRoundTotal;
-          rndStats[round].count += 1;
         }
       });
     });
 
-    const compScores = competencyAverages.map(ca => {
-       const stat = compStats[ca.name];
-       return stat && stat.count > 0 ? (stat.sum / stat.count).toFixed(2) : 0;
+    // 1. Get Candidate's individual competency averages
+    const candidateCompAverages = {};
+    Object.keys(compStats).forEach(comp => {
+      candidateCompAverages[comp] = compStats[comp].count > 0 ? (compStats[comp].sum / compStats[comp].count) : 0;
     });
 
-    const roundScores = roundAverages.map(ra => {
-       const stat = rndStats[ra.name];
-       return stat && stat.count > 0 ? (stat.sum / stat.count).toFixed(2) : 0;
+    const compScores = competencyAverages.map(ca => candidateCompAverages[ca.name].toFixed(2));
+
+    // 2. Sum them up for the Candidate's Clusters
+    const candidateClusterTotals = {
+      'Collaborate for Success': 0,
+      'Drive for Results': 0,
+      'Achieving Excellence': 0
+    };
+
+    Object.keys(candidateCompAverages).forEach(comp => {
+      const clusterName = clusterMap[comp];
+      if (clusterName) {
+        candidateClusterTotals[clusterName] += candidateCompAverages[comp];
+      }
     });
 
-    return { compScores, roundScores, comments };
+    const clusterScores = clusterAverages.map(ca => candidateClusterTotals[ca.name].toFixed(2));
+
+    return { compScores, clusterScores, comments };
   };
 
 const generatePDF = async (candidate) => {
     const doc = new jsPDF('p', 'mm', 'a4');
-    const { compScores, roundScores, comments } = getCandidateScores(candidate['CNIC']);
-
+const { compScores, clusterScores, comments } = getCandidateScores(candidate['CNIC']);
     // DEBUG: Check your browser console to ensure comments are being found!
     console.log(`Comments found for ${candidate['Names']}:`, comments);
 
@@ -446,12 +468,12 @@ const generatePDF = async (candidate) => {
     const compLabels = competencyAverages.map(c => c.name);
     const compMean = competencyAverages.map(c => c.avg);
     const compImg = await createChartImage(compLabels, compScores, compMean, 'Competency Scores vs Mean');
-    doc.addImage(compImg, 'PNG', 15, 75, 180, 70); // Y=75, Height=70
+    doc.addImage(compImg, 'PNG', 15, 75, 180, 70); 
 
-    const roundLabels = roundAverages.map(r => r.name);
-    const roundMean = roundAverages.map(r => parseFloat(r.avg.split(' ')[0])); 
-    const roundImg = await createChartImage(roundLabels, roundScores, roundMean, 'Round Scores vs Mean');
-    doc.addImage(roundImg, 'PNG', 15, 150, 180, 70); // Y=150, Height=70
+    const clusterLabels = clusterAverages.map(c => c.name);
+    const clusterMean = clusterAverages.map(c => c.avg); 
+    const clusterImg = await createChartImage(clusterLabels, clusterScores, clusterMean, 'Competency Clusters vs Mean');
+    doc.addImage(clusterImg, 'PNG', 15, 150, 180, 70);
 
     // --- 4. ADD ASSESSOR COMMENTS AT THE BOTTOM ---
     if (comments && comments.length > 0) {
@@ -732,9 +754,39 @@ const renderResultsTable = (dataArray) => (
                     </CardContent></Card>
                   </Grid>
                   <Grid item xs={12} md={6}>
-                    <Card elevation={3}><CardContent><Typography variant="h6" sx={{ mb: 2, color: '#9c27b0', fontWeight: 'bold' }}>Average by Round</Typography>
-                        <TableContainer component={Paper} variant="outlined"><Table size="small"><TableHead><TableRow sx={{ backgroundColor: '#f0f0f0' }}><TableCell sx={{ fontWeight: 'bold' }}>Round Name</TableCell><TableCell align="right" sx={{ fontWeight: 'bold' }}>Average Score</TableCell></TableRow></TableHead><TableBody>{roundAverages.map((round, idx) => (<TableRow key={idx}><TableCell>{round.name}</TableCell><TableCell align="right"><Chip label={round.avg} color="secondary" variant="outlined" size="small" sx={{ fontWeight: 'bold' }} /></TableCell></TableRow>))}</TableBody></Table></TableContainer>
-                    </CardContent></Card>
+                    <Card elevation={3}>
+                      <CardContent>
+                        <Typography variant="h6" sx={{ mb: 2, color: '#9c27b0', fontWeight: 'bold' }}>
+                          Average by Competency Cluster
+                        </Typography>
+                        <TableContainer component={Paper} variant="outlined">
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: '#f0f0f0' }}>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Cluster Name</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 'bold' }}>Average Score</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {clusterAverages.map((cluster, idx) => (
+                                <TableRow key={idx}>
+                                  <TableCell>{cluster.name}</TableCell>
+                                  <TableCell align="right">
+                                    <Chip 
+                                      label={`${cluster.avg} / ${cluster.max}`} 
+                                      color="secondary" 
+                                      variant="outlined" 
+                                      size="small" 
+                                      sx={{ fontWeight: 'bold' }} 
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </CardContent>
+                    </Card>
                   </Grid>
                 </Grid>
               </Box>
