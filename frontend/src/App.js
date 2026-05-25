@@ -96,6 +96,7 @@ const Dashboard = () => {
   const [competencyAverages, setCompetencyAverages] = useState([]);
 const [clusterAverages, setClusterAverages] = useState([]);
   const [loading, setLoading] = useState(true);
+const [isGeneratingBulk, setIsGeneratingBulk] = useState(false);
 
   const cleanHeaders = (data) => {
     return data.map(row => {
@@ -403,68 +404,62 @@ const getCandidateScores = (cnic) => {
     return { compScores, clusterScores, comments };
   };
 
-const generatePDF = async (candidate) => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-const { compScores, clusterScores, comments } = getCandidateScores(candidate['CNIC']);
-    // DEBUG: Check your browser console to ensure comments are being found!
-    console.log(`Comments found for ${candidate['Names']}:`, comments);
+// 1. Helper to draw charts
+  const createChartImage = async (labels, candidateData, meanData, title) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800; canvas.height = 320; 
+    
+    const chart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Candidate Score', data: candidateData, backgroundColor: '#005A9C' },
+          { label: 'Overall Mean', data: meanData, backgroundColor: '#B31B1B' }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: false,
+        plugins: { title: { display: true, text: title, font: { size: 18 } } }
+      }
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 100)); 
+    const imgData = canvas.toDataURL('image/png');
+    chart.destroy();
+    return imgData;
+  };
 
-    // --- 1. HEADER & INFO ---
+  // 2. Core Report Builder (Draws 1 candidate's report onto the provided doc)
+  const buildCandidateReport = async (doc, candidate) => {
+    const { compScores, clusterScores, comments } = getCandidateScores(candidate['CNIC']);
+
+    // HEADER & INFO
     doc.setFontSize(22);
-    doc.setTextColor(0, 90, 156); // HOH Blue
+    doc.setTextColor(0, 90, 156); 
     doc.text("House of Habib | Mission Believe", 105, 20, { align: "center" });
     
     doc.setFontSize(14);
-    doc.setTextColor(179, 27, 27); // Carnelian Red
+    doc.setTextColor(179, 27, 27); 
     doc.text("Candidate Assessment Report", 105, 28, { align: "center" });
 
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
     
-    // Left Column
     doc.text(`Name: ${candidate['Names']}`, 20, 45);
     doc.text(`CNIC: ${candidate['CNIC']}`, 20, 52);
     doc.text(`University: ${candidate['University']}`, 20, 59);
     doc.text(`Mobile: ${candidate['Mobile']}`, 20, 66);
 
-    // Right Column
     doc.text(`CGPA: ${candidate['Cgpa']}`, 120, 45);
     doc.text(`Interview Grade: ${candidate['Screening Interview']}`, 120, 52);
     doc.text(`Profile Match: ${candidate['Test Score/Role Fit']}`, 120, 59);
     doc.text(`AC Rank: #${candidate['AC Rank']}`, 120, 66);
 
-    doc.line(20, 72, 190, 72); // Divider line
+    doc.line(20, 72, 190, 72); 
 
-    // --- 2. HELPER TO GENERATE CHART IMAGES ---
-    const createChartImage = async (labels, candidateData, meanData, title) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 800; canvas.height = 320; // Slightly shorter charts
-      
-      const chart = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [
-            { label: 'Candidate Score', data: candidateData, backgroundColor: '#005A9C' },
-            { label: 'Overall Mean', data: meanData, backgroundColor: '#B31B1B' }
-          ]
-        },
-        options: {
-          animation: false,
-          responsive: false,
-          plugins: {
-            title: { display: true, text: title, font: { size: 18 } }
-          }
-        }
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 100)); 
-      const imgData = canvas.toDataURL('image/png');
-      chart.destroy();
-      return imgData;
-    };
-
-    // --- 3. ADD CHARTS TO PDF ---
+    // CHARTS
     const compLabels = competencyAverages.map(c => c.name);
     const compMean = competencyAverages.map(c => c.avg);
     const compImg = await createChartImage(compLabels, compScores, compMean, 'Competency Scores vs Mean');
@@ -475,12 +470,11 @@ const { compScores, clusterScores, comments } = getCandidateScores(candidate['CN
     const clusterImg = await createChartImage(clusterLabels, clusterScores, clusterMean, 'Competency Clusters vs Mean');
     doc.addImage(clusterImg, 'PNG', 15, 150, 180, 70);
 
-    // --- 4. ADD ASSESSOR COMMENTS AT THE BOTTOM ---
+    // COMMENTS
     if (comments && comments.length > 0) {
-      let yPos = 230; // Start much higher up to prevent cutting off!
-
+      let yPos = 230; 
       doc.setFontSize(11);
-      doc.setTextColor(0, 90, 156); // HOH Blue
+      doc.setTextColor(0, 90, 156); 
       doc.text("Comments (if any):", 15, yPos);
       yPos += 6;
 
@@ -488,25 +482,40 @@ const { compScores, clusterScores, comments } = getCandidateScores(candidate['CN
       doc.setTextColor(50, 50, 50); 
       
       comments.forEach(comment => {
-        // If we are about to run off the bottom of the page, create a new page!
         if (yPos > 280) {
           doc.addPage();
-          yPos = 20; // Reset to top of new page
+          yPos = 20; 
         }
-
         const splitComment = doc.splitTextToSize(`• ${comment}`, 180); 
         doc.text(splitComment, 15, yPos);
-        yPos += (splitComment.length * 4.5) + 2; // Move down based on text length + padding
+        yPos += (splitComment.length * 4.5) + 2; 
       });
     } else {
-      // If no comments exist, print this so you know the code is working
       doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
       doc.text("No assessor comments provided for this candidate.", 15, 230);
     }
+  };
 
-    // --- 5. SAVE PDF ---
+  // 3. Single PDF Generator (For the table button)
+  const generatePDF = async (candidate) => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    await buildCandidateReport(doc, candidate);
     doc.save(`${candidate['Names'].trim()}_Report.pdf`);
+  };
+
+  // 4. Bulk PDF Generator (For the Top 70 button)
+const generateBulkPDF = async (candidatesList, filename) => {
+    setIsGeneratingBulk(true); 
+    const doc = new jsPDF('p', 'mm', 'a4');
+    
+    for (let i = 0; i < candidatesList.length; i++) {
+      if (i > 0) doc.addPage(); 
+      await buildCandidateReport(doc, candidatesList[i]);
+    }
+    
+    doc.save(filename); // <--- Now it uses the correct name!
+    setIsGeneratingBulk(false); 
   };
 
   // Generic Download Function
@@ -818,22 +827,54 @@ const renderResultsTable = (dataArray) => (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#333' }}>Top 70 Candidates</Typography>
-                  <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => downloadCSV(top70Candidates, 'Top_70_Candidates.csv')}>
-                    Download Top 70
-                  </Button>
+                  
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    {/* NEW BULK PDF BUTTON */}
+                    <Button 
+                      variant="contained" 
+                      color="primary" 
+                      startIcon={isGeneratingBulk ? <CircularProgress size={20} color="inherit" /> : <PrintIcon />} 
+                      onClick={() => generateBulkPDF(top70Candidates, 'Top_70_Candidates_Reports.pdf')}
+                      disabled={isGeneratingBulk}
+                    >
+                      {isGeneratingBulk ? 'Generating PDFs...' : 'Download All Reports (PDF)'}
+                    </Button>
+
+                    {/* EXISTING CSV BUTTON */}
+                    <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => downloadCSV(top70Candidates, 'Top_70_Candidates.csv')}>
+                      Download Top 70 CSV
+                    </Button>
+                  </Box>
+
                 </Box>
                 {renderResultsTable(top70Candidates)}
               </Box>
             )}
-
+            
             {/* TAB 6: STAR CANDIDATES */}
             {activeTab === 6 && (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#333' }}>Star Candidates</Typography>
-                  <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => downloadCSV(starCandidatesList, 'Star_Candidates.csv')}>
-                    Download Star Candidates
-                  </Button>
+                  
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    {/* NEW BULK PDF BUTTON FOR STAR CANDIDATES */}
+                    <Button 
+                      variant="contained" 
+                      color="primary" 
+                      startIcon={isGeneratingBulk ? <CircularProgress size={20} color="inherit" /> : <PrintIcon />} 
+                      onClick={() => generateBulkPDF(starCandidatesList)}
+                      disabled={isGeneratingBulk}
+                    >
+                      {isGeneratingBulk ? 'Generating PDFs...' : 'Download All Reports (PDF)'}
+                    </Button>
+
+                    {/* EXISTING CSV BUTTON */}
+                    <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => downloadCSV(starCandidatesList, 'Star_Candidates.csv')}>
+                      Download Star Candidates CSV
+                    </Button>
+                  </Box>
+
                 </Box>
                 {renderResultsTable(starCandidatesList)}
               </Box>
